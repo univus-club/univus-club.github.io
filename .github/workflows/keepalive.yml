@@ -1,0 +1,41 @@
+# Supabase 무료 프로젝트는 일주일 동안 접속이 없으면 잠들어요.
+# 이 작업이 3일마다 한 번씩 자동으로 접속해서 깨워 둬요. 손댈 필요 없어요.
+# 접속에 실패하면 GitHub가 동아리 계정 메일로 "Run failed" 알림을 보내요.
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "17 3 */3 * *"   # 매월 1, 4, 7 ... 일 12:17 (한국 시간)
+  workflow_dispatch:          # Actions 탭에서 직접 실행해 볼 수도 있어요
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Supabase 깨우기
+        run: |
+          URL=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]*' config.js || true)
+          KEY=$(grep -oP 'SUPABASE_ANON_KEY:\s*"\K[^"]*' config.js || true)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "config.js 가 비어 있어서 건너뛰어요 (예시 모드)."
+            exit 0
+          fi
+          curl -fsS --retry 3 --retry-delay 20 "$URL/rest/v1/galaxies?select=gen&limit=1" -H "apikey: $KEY" > /dev/null
+          echo "Supabase 응답 OK"
+
+      # GitHub는 60일 동안 저장소에 변화가 없으면 예약 작업을 멈춰요.
+      # 그래서 매월 1일에 날짜 한 줄을 기록해서 저장소를 살아 있게 해요.
+      - name: 한 달에 한 번 기록 남기기
+        run: |
+          if [ "$(date -u +%d)" = "01" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            date -u +%Y-%m-%dT%H:%M:%SZ > .github/last-ping.txt
+            git config user.name "univ-us-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/last-ping.txt
+            git commit -m "keep-alive" && git push || echo "기록할 변화 없음"
+          fi
