@@ -1,0 +1,123 @@
+# Univ-Us
+
+Univ-Us 동아리의 활동 기록 사이트예요. 기수마다 은하가 하나씩 생기고, 활동 하나가 별 하나가 돼요.
+
+- **외부인**: 은하 모양과 활동 제목, 날짜를 볼 수 있어요.
+- **동아리원**: 기수 비밀번호로 입장하면 모든 은하의 사진과 일지를 볼 수 있어요. 활동이 끝난 기수도 자기 비밀번호로 계속 들어올 수 있어요.
+- **운영진**: 운영진 비밀번호로 입장하면 별을 올리고, 고치고, 지울 수 있어요.
+
+비용은 0원이에요. 사이트는 GitHub Pages, 기록과 사진은 Supabase 무료 요금제에 있어요. 카드를 등록할 일이 없어요.
+
+---
+
+## 운영 가이드 (회장·운영진용)
+
+코드를 몰라도 돼요. 모든 일은 사이트 안에서 해요.
+
+### 활동 기록 올리기
+1. 사이트에서 **입장하기** → 운영진 비밀번호 입력
+2. 오른쪽 위 **✦ 별 추가**
+3. 은하(기수), 날짜, 제목, 일지를 쓰고 사진을 골라요 (최대 10장, 자동으로 줄여서 올라가요)
+4. 사진을 올릴 때는 **원하지 않는 사람의 얼굴이나 연락처·학번 같은 개인정보가 보이지 않는지** 꼭 확인하세요. 졸업한 기수도 사진을 볼 수 있어요.
+
+잘못 올렸으면 별을 눌러 **고치기** 또는 **지우기**를 하면 돼요.
+
+### 새 기수가 시작될 때
+1. 운영진으로 입장 → 오른쪽 위 **운영**
+2. **새 기수 시작하기**에 기수 번호, 은하 이름, 그 기수의 비밀번호를 적고 **은하 만들기**
+3. 그 비밀번호를 새 기수 단톡방 공지에 올려요
+
+### 회장이 바뀔 때 (인수인계 체크리스트)
+- [ ] 동아리 공용 구글 계정 비밀번호와 2단계 인증 기기를 넘겨요
+- [ ] 새 회장이 사이트에서 **운영 → 운영진 비밀번호**를 바꿔요 (그러면 이전 운영진의 입장은 자동으로 풀려요)
+- [ ] 새 운영진들에게 새 운영진 비밀번호를 알려줘요
+- [ ] 이 README가 어디 있는지 알려줘요
+
+### 기수 비밀번호가 밖으로 샜을 때
+1. **운영 → 기수 비밀번호**에서 그 기수 비밀번호를 **바꾸기**
+2. **모든 동아리원 다시 입장시키기** 누르기
+3. 그 기수 단톡방에 새 비밀번호를 공유해요
+
+### 운영진 비밀번호를 잊어버렸을 때
+1. 공용 구글 계정으로 [Supabase](https://supabase.com/dashboard) 로그인 → 프로젝트 → 왼쪽 **SQL Editor**
+2. 아래를 붙여넣고 비밀번호 부분을 바꾼 뒤 **Run**
+
+```sql
+update public.secrets
+   set hash = extensions.crypt('새-운영진-비밀번호', extensions.gen_salt('bf')), updated_at = now()
+ where key = 'admin';
+```
+
+### 사이트가 안 열리거나 "우주를 불러오지 못했어요"가 뜰 때
+- Supabase 프로젝트가 잠들었을 수 있어요. Supabase 대시보드에서 프로젝트를 열고 **Restore** 버튼을 누르세요. (평소에는 자동 접속 기능이 막아줘요)
+- 동아리 메일로 GitHub의 **"Run failed: keep-alive"** 메일이 왔다면 이 경우예요.
+
+### 행사에서 한꺼번에 입장할 때
+같은 와이파이에서 1시간에 30명 넘게 처음 입장하면 Supabase가 잠시 막을 수 있어요. 큰 행사 전에는 Supabase 대시보드 → **Authentication → Rate Limits**에서 익명 로그인 한도를 100 정도로 올려두세요. 또는 모바일 데이터로 입장하게 안내하세요.
+
+### 저장 공간
+**운영** 화면 맨 아래에서 사진 용량을 대략 확인할 수 있어요. 무료 한도(사진 1GB)는 1년에 사진 500장을 올려도 10년쯤 버텨요.
+
+---
+
+## 처음 설치 (한 번만, 약 30분)
+
+### 1. 동아리 공용 구글 계정 만들기
+예: `univus.club@gmail.com`. 아래 모든 서비스를 이 계정으로 가입해야 회장이 바뀌어도 넘겨줄 수 있어요. 2단계 인증을 켜 두세요.
+
+### 2. GitHub에 사이트 올리기
+1. 공용 계정으로 [GitHub](https://github.com) 가입. 계정 이름이 사이트 주소가 돼요 (예: `univus-club` → `univus-club.github.io`)
+2. 오른쪽 위 **+ → New repository**
+   - Repository name: `계정이름.github.io` (예: `univus-club.github.io`) → 주소가 `https://univus-club.github.io`가 돼요
+   - **Public** 선택 → **Create repository**
+3. **uploading an existing file**을 눌러 이 폴더의 파일을 모두 끌어다 놓고 **Commit changes**
+4. `.github` 폴더가 안 올라갔다면 (macOS는 숨김 폴더라서 자주 빠져요): **Add file → Create new file**, 이름에 `.github/workflows/keepalive.yml`을 적고 그 파일 내용을 붙여넣어 커밋
+
+### 3. Supabase 만들기
+1. 공용 계정으로 [Supabase](https://supabase.com) 가입 → **New project**
+   - Region: **Northeast Asia (Seoul)**
+   - Database Password: 아무거나 길게 (공용 계정 드라이브에 적어두기)
+2. 프로젝트가 만들어지면 왼쪽 **SQL Editor** → `supabase/schema.sql` 파일 내용을 전부 붙여넣기
+3. 맨 아래 `'여기에-운영진-비밀번호'`를 실제 운영진 비밀번호(8자 이상)로 바꾸고 **Run** → "Success" 확인
+4. 왼쪽 **Authentication → Sign In / Providers** → **Allow anonymous sign-ins** 켜고 저장
+   (동아리원이 개인 계정 없이 비밀번호만으로 입장하는 데 필요해요)
+
+### 4. 사이트와 Supabase 연결하기
+1. Supabase → **Project Settings → API Keys**에서 두 값을 복사해요
+   - **Project URL** (`https://xxxx.supabase.co`, Project Settings → Data API에 있어요)
+   - **Publishable key** (`sb_publishable_...`로 시작)
+   - ⚠️ `sb_secret_...`로 시작하는 Secret key는 절대 쓰지 마세요
+2. GitHub 저장소에서 `config.js`를 열고 연필 아이콘(Edit) → 두 값을 따옴표 안에 붙여넣고 **Commit changes**
+
+### 5. 사이트 공개하기
+1. GitHub 저장소 → **Settings → Pages**
+2. Source: **Deploy from a branch**, Branch: **main** / **(root)** → **Save**
+3. 1~2분 뒤 `https://계정이름.github.io`로 접속돼요
+
+### 6. 자동 접속 켜기
+1. GitHub 저장소 → **Actions** 탭 → 안내가 나오면 **I understand my workflows, go ahead and enable them**
+2. 왼쪽 **keep-alive** → **Run workflow**로 한 번 실행해서 초록색 체크가 뜨는지 확인
+
+### 7. 첫 기수 만들기
+사이트 → **입장하기** → 운영진 비밀번호 → **운영 → 새 기수 시작하기**
+
+(나중에 도메인을 사고 싶어지면 GitHub **Settings → Pages → Custom domain**에서 연결하면 돼요. 사이트는 그대로예요.)
+
+---
+
+## 구조 (개발자용)
+
+| 파일 | 하는 일 |
+|---|---|
+| `index.html` | 화면 틀과 스타일 |
+| `app.js` | 우주 그리기, 입장, 운영진 기능. `config.js`가 비어 있으면 예시 모드로 돌아가요 |
+| `config.js` | Supabase 주소와 Publishable key |
+| `supabase/schema.sql` | 테이블, 행 단위 보안(RLS), 비밀번호 함수, 사진 저장소 정책 |
+| `.github/workflows/keepalive.yml` | 3일마다 Supabase 깨우기 + 매월 1일 저장소 기록 |
+
+**보안 모델**
+- 입장하면 브라우저가 Supabase **익명 로그인** 세션을 만들고, `unlock(pw)` 함수가 bcrypt 해시와 비교해 `access` 표에 그 세션의 권한(member/admin)을 기록해요.
+- 일지(`star_notes`), 사진 목록(`photos`), 사진 파일(Storage `photos` 버킷, 비공개)은 RLS로 `is_member()`일 때만 읽혀요. 사진은 1시간짜리 서명 URL로만 보여요.
+- 쓰기는 모두 `is_admin()`만 가능해요. 화면이 아니라 DB가 검사하므로 개발자 도구로 요청을 조작해도 막혀요.
+- 비밀번호 해시(`secrets`)는 어떤 클라이언트도 읽을 수 없어요. 같은 세션이 10분 안에 8번 틀리면 막혀요.
+- 운영진 비밀번호를 바꾸면 다른 운영진 세션이 모두 풀려요.
