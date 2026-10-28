@@ -115,6 +115,23 @@ body.panel-open .banner{display:none}
 .pwrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
 .pwrow .l{display:flex;flex-direction:column;min-width:0}
 .pwrow .l small{font-family:var(--f-mono);font-size:11px;color:var(--faint)}
+.linkbox{flex-basis:100%;min-width:0;overflow-x:auto;background:rgba(6,7,15,.6);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.joinlink{font-family:var(--f-mono);font-size:12px;white-space:nowrap;user-select:all;color:var(--ink)}
+.pwrow > .row,.pwrow > .msg{flex-basis:100%}
+fieldset.look{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+fieldset.look legend{font-size:13px;color:var(--muted);padding:0;margin-bottom:6px}
+canvas.preview{width:100%;max-width:100%;height:96px;border-radius:10px;border:1px solid var(--line);display:block}
+.pick{display:grid;gap:6px}
+.pick.shapes{grid-template-columns:repeat(6,minmax(0,1fr))}
+.pick.colors{grid-template-columns:repeat(8,minmax(0,1fr))}
+@media (max-width:640px){.pick.colors{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.pick .opt{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;padding:6px 0 5px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:11px;color:var(--muted);background:rgba(6,7,15,.4)}
+.pick .opt:hover{border-color:var(--muted)}
+.pick .opt.on{border-color:var(--star);color:var(--ink);background:rgba(255,217,143,.08)}
+.pick .opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.pick .opt:has(input:focus-visible){outline:2px solid var(--star);outline-offset:2px}
+.pick .opt canvas{width:34px;height:34px}
+.pick .swatch i{display:block;width:20px;height:20px;border-radius:50%;margin:7px 0 5px;box-shadow:0 0 10px rgba(255,255,255,.15)}
 .meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .meter i{display:block;height:100%;background:var(--star)}
 
