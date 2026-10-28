@@ -19,7 +19,10 @@ const el = (tag, props = {}, ...kids) => {
 };
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pad = (n, w = 2) => String(n).padStart(w, "0");
-const fmtDate = d => (d ? d.replaceAll("-", ".") : "");
+// 2026-03-07 → "2026. 3. 7." (목록) / "2026년 3월 7일" (문장)
+const ymd = d => { const [y, m, dd] = String(d || "").slice(0, 10).split("-").map(Number); return [y, m, dd]; };
+const fmtDate = d => { if (!d) return ""; const [y, m, dd] = ymd(d); return `${y}. ${m}. ${dd}.`; };
+const fmtDateKo = d => { if (!d) return ""; const [y, m, dd] = ymd(d); return `${y}년 ${m}월 ${dd}일`; };
 const todaySeoul = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
 function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
@@ -444,7 +447,7 @@ function frame(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.globalCompositeOperation = "source-over";
   const bg = ctx.createRadialGradient(W * 0.5, H * 0.45, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.8);
-  bg.addColorStop(0, "#0e1130"); bg.addColorStop(1, "#06070f");
+  bg.addColorStop(0, "#0e1a3a"); bg.addColorStop(1, "#050914");
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = "#ffffff";
@@ -496,15 +499,16 @@ function frame(now) {
       const [cx, cy] = toScreen(g.x, g.y);
       const Rs = g.R * cam.z;
       ctx.fillStyle = `hsla(${g.hue},60%,88%,.92)`;
-      ctx.font = `${Math.round(Math.max(13, Math.min(20, 15 * cam.z + 8)))}px Orbit, "IBM Plex Sans KR", sans-serif`;
-      ctx.fillText(`${g.gen}기${g.name ? " · " + g.name : ""}`, cx, cy + Rs + 22);
-      ctx.font = `11px "IBM Plex Mono", monospace`;
+      ctx.font = `${Math.round(Math.max(20, Math.min(30, 22 * cam.z + 12)))}px "Nanum Pen Script", "Gowun Batang", serif`;
+      ctx.fillText(`${g.gen}기${g.name ? " " + g.name : ""}`, cx, cy + Rs + 24);
+      ctx.font = `12px "Gowun Batang", serif`;
       ctx.fillStyle = "rgba(170,176,220,.7)";
-      ctx.fillText(`★ ${g.stars.length}`, cx, cy + Rs + 38);
+      ctx.fillText(`별 ${g.stars.length}개`, cx, cy + Rs + 42);
     }
   }
   if (cam.z > 1.05) {
-    ctx.font = `12px "IBM Plex Sans KR", sans-serif`;
+    ctx.font = `19px "Nanum Pen Script", "Gowun Batang", serif`;
+    ctx.shadowColor = "rgba(5,9,20,.95)"; ctx.shadowBlur = 6;
     ctx.textAlign = "left";
     for (const h of hits) {
       if (h.x < -50 || h.x > W + 50 || h.y < -20 || h.y > H + 20) continue;
@@ -513,6 +517,7 @@ function frame(now) {
       ctx.fillText(tt, h.x + 10, h.y + 4);
     }
   }
+  ctx.shadowBlur = 0;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -605,10 +610,10 @@ function hitTest(sx, sy) {
 /* ============================== 화면 틀 ============================== */
 function renderChrome() {
   // 오른쪽 위 버튼들
-  const stats = el("div", { class: "stats" }, "은하 ", el("b", { text: String(S.galaxies.length) }), " · 별 ", el("b", { text: String(S.stars.length) }));
+  const stats = el("div", { class: "stats" }, "은하 ", el("b", { text: String(S.galaxies.length) }), "개, 별 ", el("b", { text: String(S.stars.length) }), "개");
   const acts = [stats];
   if (canPostAny()) {
-    acts.push(el("button", { class: "btn", type: "button", onclick: () => openStarForm(null, S.view && S.view.gen) }, "✦ 별 추가"));
+    acts.push(el("button", { class: "btn", type: "button", onclick: () => openStarForm(null, S.view && S.view.gen) }, "별 띄우기"));
   }
   if (isAdmin()) {
     acts.push(el("button", { class: "btn ghost", type: "button", onclick: openSettings }, "운영"));
@@ -626,7 +631,7 @@ function renderChrome() {
       class: "chip", type: "button", "aria-current": S.view && S.view.gen === g.gen ? "true" : "false",
       onclick: () => openGalaxy(g.gen, true),
     }, el("i", { style: `background:hsl(${g.hue},80%,70%);box-shadow:0 0 8px hsl(${g.hue},80%,60%)` }), `${g.gen}기`, el("small", { text: String(g.stars.length) }))),
-    S.galaxies.length ? el("span", { class: "hint", text: "드래그로 이동 · 스크롤로 확대" }) : null,
+    S.galaxies.length ? el("span", { class: "hint", text: "끌어서 둘러보고, 스크롤로 가까이" }) : null,
   );
 
   // 가운데 안내
@@ -672,7 +677,8 @@ function refreshView() {
   if (v.type === "galaxy") openGalaxy(v.gen, false);
   else if (v.type === "star") { if (S.stars.some(s => s.id === v.id)) openStar(v.id, false); else if (v.gen) openGalaxy(v.gen, false); else closePanel(); }
 }
-const head = (eyebrow, title) => el("div", {}, el("div", { class: "eyebrow", text: eyebrow }), el("h2", { text: title }));
+// 손글씨 제목 + (있으면) 그 아래 한 줄 설명
+const head = (title, sub, ...extra) => el("div", {}, el("h2", { text: title }), sub || extra.length ? el("p", { class: "sub" }, sub || "", ...extra) : null);
 const msg = () => el("p", { class: "msg", hidden: true });
 const say = (m, text, ok) => { m.textContent = text; m.className = "msg " + (ok ? "ok" : "err"); m.hidden = false; };
 
@@ -684,12 +690,12 @@ function openGalaxy(gen, fly) {
   const first = g.stars[0];
   const adminBox = isAdmin() ? galaxyAdmin(g) : null;
   show({ type: "galaxy", gen }, `Galaxy ${pad(gen)}`,
-    head(`${g.gen}기 은하`, g.name || `${g.gen}기의 은하`),
-    el("div", { class: "meta" }, el("span", { text: `별 ${g.stars.length}개` }), first ? el("span", { text: `첫 기록 ${fmtDate(first.date)}` }) : null),
-    canPostIn(g.gen) ? el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => openStarForm(null, g.gen) }, "✦ 이 은하에 별 추가")) : null,
+    head(g.name ? `${g.gen}기 ${g.name}` : `${g.gen}기`,
+      g.stars.length ? `별 ${g.stars.length}개. 첫 기록은 ${fmtDateKo(first.date)}.` : "아직 별이 없는 은하예요."),
+    canPostIn(g.gen) ? el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => openStarForm(null, g.gen) }, "이 은하에 별 띄우기")) : null,
     list.length
       ? el("div", { class: "loglist" }, list.map(s => {
-          const sub = [isMine(s) ? "내 기록" : "", s.photo_count ? `사진 ${s.photo_count}장` : ""].filter(Boolean).join(" · ");
+          const sub = [isMine(s) ? "내 기록" : "", s.photo_count ? `사진 ${s.photo_count}장` : ""].filter(Boolean).join(", ");
           return el("button", { class: "logrow", type: "button", onclick: () => openStar(s.id, true) },
             el("span", { class: "d", text: fmtDate(s.date) }), el("span", { class: "t", text: s.title }),
             sub ? el("span", { class: "a", text: sub }) : null);
@@ -740,7 +746,7 @@ function openStar(id, fly) {
           photos.map(p => el("button", { type: "button", "aria-label": "사진 크게 보기", onclick: () => lightbox(p.url) },
             el("img", { src: p.url, alt: `${s.title} 활동 사진`, loading: "lazy" })))) : null,
         d.body ? el("p", { class: "body-text", text: d.body }) : (photos.length ? null : el("p", { class: "empty-line", text: "아직 일지가 없어요." })),
-        d.author ? el("p", { class: "fine", text: `글쓴이 · ${d.author}` }) : null,
+        d.author ? el("p", { class: "fine", text: `${d.author} 씀` }) : null,
       ].filter(Boolean));
     }).catch(e => { if (my === detailToken) content.replaceChildren(el("p", { class: "msg err", text: friendly(e) })); });
   } else {
@@ -767,9 +773,8 @@ function openStar(id, fly) {
       isMine(s) ? null : el("p", { class: "fine", text: "운영진이라 다른 사람이 올린 기록도 고치거나 지울 수 있어요." }));
   }
   show({ type: "star", id, gen: s.gen, back: () => openGalaxy(s.gen, true) }, `UV-${pad(s.gen)}-${pad(s.index + 1, 3)}`,
-    head(`${s.gen}기 · ${s.index + 1}번째 별`, s.title),
-    el("div", { class: "meta" }, el("span", { text: fmtDate(s.date) }), s.photo_count ? el("span", { text: `사진 ${s.photo_count}장` }) : null,
-      isMine(s) ? el("span", { class: "badge member", text: "내 기록" }) : null),
+    head(s.title, `${fmtDateKo(s.date)}, ${s.gen}기 은하의 ${s.index === 0 ? "첫 " : s.index + 1}번째 별${s.photo_count ? `, 사진 ${s.photo_count}장` : ""}`,
+      isMine(s) ? el("span", { class: "stamp", text: "내 기록" }) : null),
     content, admin);
   if (fly && g) {
     const [wx, wy] = starPos(g, s, rotNow());
@@ -811,7 +816,7 @@ function openUnlock(after, preset) {
       if (after) after(); else { say(m, r.text, true); pw.value = ""; }
     } catch (err) { say(m, friendly(err)); go.disabled = false; go.textContent = "입장"; }
   });
-  show({ type: "unlock" }, "Access", head("입장", "동아리원 입장"),
+  show({ type: "unlock" }, "Access", head("동아리원 입장"),
     el("p", { class: "empty-line", text: "단톡방 공지에 있는 우리 기수 입장 링크를 누르면 바로 입장돼요. 링크 끝의 코드를 여기에 직접 입력해도 돼요. 한 번 입장하면 이 기기에서는 다시 묻지 않아요." }),
     preset ? el("p", { class: "msg err", text: preset }) : null,
     form);
@@ -819,7 +824,7 @@ function openUnlock(after, preset) {
 }
 function openAccount() {
   const mine = S.gens.slice().sort((a, b) => a - b).map(g => `${g}기`).join(", ");
-  show({ type: "account" }, "Access", head("입장 상태", "동아리원으로 입장해 있어요"),
+  show({ type: "account" }, "Access", head("입장해 있어요"),
     el("p", { class: "empty-line", text: mine
       ? `모든 은하의 사진과 일지를 볼 수 있고, ${mine} 은하에 기록을 남길 수 있어요. 내가 올린 기록은 이 기기에서 고치거나 지울 수 있어요.`
       : "모든 은하의 사진과 일지를 볼 수 있어요. 기록을 남기려면 우리 기수 입장 링크를 한 번 더 눌러 주세요." }),
@@ -829,7 +834,7 @@ function openAccount() {
     el("div", { class: "section" },
       el("p", { text: "나가면 이 기기에서 올린 기록을 더 이상 직접 고치거나 지울 수 없어요. 필요하면 운영진에게 부탁하세요." }),
       el("div", { class: "row" }, el("button", { class: "btn ghost small", type: "button", onclick: signOut }, "이 기기에서 나가기")),
-      S.uid ? el("p", { class: "fine", text: `기기 ID · ${S.uid}` }) : null));
+      S.uid ? el("p", { class: "fine", text: `이 기기의 ID: ${S.uid}` }) : null));
 }
 async function signOut() {
   await S.api.signOut().catch(() => {});
@@ -870,7 +875,7 @@ function starLookPicker(shape0, color0, getGen, getTitle) {
     const t = (getTitle() || "").trim() || "오늘의 별";
     paint(preview, 320, 96, 120, 48, 5.2, shape, color, true);
     const c = preview.getContext("2d");
-    c.font = '14px "IBM Plex Sans KR", sans-serif'; c.fillStyle = "rgba(236,235,246,.9)"; c.textAlign = "left";
+    c.font = '22px "Nanum Pen Script", "Gowun Batang", serif'; c.fillStyle = "rgba(233,237,247,.92)"; c.textAlign = "left";
     c.fillText(t.length > 14 ? t.slice(0, 13) + "…" : t, 150, 53);
     shapeBoxes.forEach(b => { paint(b.cv, 34, 34, 17, 17, 3.4, b.sh.id, color, false); b.label.classList.toggle("on", b.sh.id === shape); });
     colorBoxes.forEach(b => { b.dot.style.background = tintOf(b.co.id, hue())(1); b.label.classList.toggle("on", b.co.id === color); });
@@ -891,7 +896,7 @@ function openStarForm(star, presetGen) {
   const allowed = S.galaxies.filter(g => canPostIn(g.gen) || (editing && g.gen === star.gen));
   const fallback = allowed[allowed.length - 1].gen;
   const gen = editing ? star.gen : (allowed.some(g => g.gen === presetGen) ? presetGen : fallback);
-  const sel = el("select", { id: "f-gen" }, allowed.map(g => el("option", { value: String(g.gen), selected: g.gen === gen }, `${g.gen}기${g.name ? " · " + g.name : ""}`)));
+  const sel = el("select", { id: "f-gen" }, allowed.map(g => el("option", { value: String(g.gen), selected: g.gen === gen }, `${g.gen}기${g.name ? " " + g.name : ""}`)));
   const author = el("input", { type: "text", id: "f-author", maxlength: "20", value: editing ? "" : savedName(), placeholder: "예: 홍길동 (비워도 돼요)" });
   const date = el("input", { type: "date", id: "f-date", value: editing ? star.date : todaySeoul(), required: true });
   const title = el("input", { type: "text", id: "f-title", maxlength: "60", value: editing ? star.title : "", placeholder: "예: 봄 MT", required: true });
@@ -919,7 +924,7 @@ function openStarForm(star, presetGen) {
     fileIn.value = ""; drawThumbs(); syncCheck();
   });
   const m = msg();
-  const submit = el("button", { class: "btn", type: "submit" }, editing ? "저장" : "✦ 별 띄우기");
+  const submit = el("button", { class: "btn", type: "submit" }, editing ? "고친 내용 저장" : "별 띄우기");
   const form = el("form", { novalidate: true },
     el("label", {}, "은하", sel),
     el("div", { class: "two" }, el("label", {}, "활동 날짜", date), el("label", {}, "제목", title)),
@@ -951,10 +956,10 @@ function openStarForm(star, presetGen) {
       S.view = { type: "star", id };
       await reload();
       openStar(id, true);
-    } catch (err) { say(m, friendly(err)); submit.disabled = false; submit.textContent = editing ? "저장" : "✦ 별 띄우기"; }
+    } catch (err) { say(m, friendly(err)); submit.disabled = false; submit.textContent = editing ? "고친 내용 저장" : "별 띄우기"; }
   });
   show({ type: "form", gen, back: editing ? () => openStar(star.id, false) : null }, editing ? "Edit star" : "New star",
-    head(editing ? "별 고치기" : "새 별", editing ? star.title : "오늘의 별을 띄워요"), form);
+    head(editing ? "별 고치기" : "오늘의 별", editing ? star.title : "무엇을 했는지 적어 두면 하늘에 별이 하나 생겨요."), form);
 }
 
 /* ---------- 운영 설정 (운영진) ---------- */
@@ -1022,7 +1027,7 @@ async function openSettings() {
   const estMB = photoTotal * 0.25;
   const pct = Math.min(100, estMB / 1024 * 100);
 
-  show({ type: "settings" }, "Mission control", head("운영", "운영진 설정"),
+  show({ type: "settings" }, "Mission control", head("운영"),
     el("div", { class: "section" }, el("h3", { text: "새 기수 시작하기" }),
       el("p", { text: "은하를 만들면 그 기수의 입장 링크가 자동으로 생겨요. 아래에서 링크를 복사해 기수 단톡방 공지에 올리세요." }), newForm),
     el("div", { class: "section" }, el("h3", { text: "기수 입장 링크" }),
@@ -1032,7 +1037,7 @@ async function openSettings() {
     el("div", { class: "section" }, el("h3", { text: "입장 링크가 밖으로 샜을 때" }),
       el("p", { text: "위에서 그 기수의 새 링크를 만든 뒤 아래 버튼을 누르면, 이미 입장한 사람도 모두 새 링크로 다시 입장해야 해요." }), rWrap),
     el("div", { class: "section" }, el("h3", { text: "사진 저장 공간" }),
-      el("div", { class: "meta" }, el("span", { text: `사진 ${photoTotal}장` }), el("span", { text: `약 ${estMB < 10 ? estMB.toFixed(1) : Math.round(estMB)}MB / 1GB (무료 한도)` })),
+      el("p", { class: "meta", text: `사진 ${photoTotal}장, 약 ${estMB < 10 ? estMB.toFixed(1) : Math.round(estMB)}MB 사용 (무료 한도 1GB)` }),
       el("div", { class: "meter", role: "img", "aria-label": `무료 한도의 약 ${pct.toFixed(0)}% 사용` }, el("i", { style: `width:${Math.max(pct, 0.5)}%` })),
       el("p", { text: "사진 한 장을 약 250KB로 계산한 대략적인 값이에요. 정확한 값은 Supabase 대시보드에서 볼 수 있어요." })),
     el("div", { class: "section" }, el("div", { class: "row" },
@@ -1062,8 +1067,8 @@ function linkRow(gen, code, updatedAt) {
       el("button", { class: "btn ghost small", type: "button", onclick: rIdle }, "취소"));
     rIdle();
     box.replaceChildren(
-      el("div", { class: "l" }, el("span", { text: `${gen}기${g && g.name ? " · " + g.name : ""}` }),
-        el("small", { text: `코드 ${fmtCode(code)} · ${fmtDate(String(updatedAt || "").slice(0, 10))} 만듦` })),
+      el("div", { class: "l" }, el("span", { text: `${gen}기${g && g.name ? " " + g.name : ""}` }),
+        el("small", { text: `코드 ${fmtCode(code)}, ${fmtDateKo(String(updatedAt || "").slice(0, 10))}에 만듦` })),
       el("div", { class: "linkbox" }, linkText),
       el("div", { class: "row" }, copy, rotWrap),
       note);
@@ -1084,9 +1089,9 @@ async function boot() {
   if (S.api.demo) {
     const b = $("#demoBanner");
     b.hidden = false;
-    b.append(el("b", { text: "예시 모드" }), " · 아래 기록은 예시이고 저장되지 않아요. ",
+    b.append(el("b", { text: "예시 화면이에요." }), " 기록은 저장되지 않아요. ",
       el("a", { href: "#join=1111-2222-3333-4444", style: "color:var(--star)" }, "1기 입장 링크"),
-      " · 운영진 비밀번호 ", el("code", { text: "admin-pass-1234" }), ". config.js에 Supabase 주소를 넣으면 실제 사이트가 돼요.");
+      "로 부원처럼, 비밀번호 ", el("code", { text: "admin-pass-1234" }), "로 운영진처럼 들어가 볼 수 있어요. config.js에 Supabase 주소를 넣으면 실제 사이트가 돼요.");
   }
   await refreshMe();
   await reload();
@@ -1104,10 +1109,10 @@ async function joinFromLink() {
   try {
     const r = await enterWith(m[1]);
     if (!r.ok) return openUnlock(null, "이 입장 링크는 더 이상 쓸 수 없어요. 단톡방 공지에서 최신 링크를 받아 주세요.");
-    show({ type: "joined" }, "Access", head("입장", "Univ-Us에 오신 걸 환영해요"),
+    show({ type: "joined" }, "Access", head("어서 와요"),
       el("p", { class: "msg ok", text: r.text }),
       el("p", { class: "fine", text: "이 기기에서는 다시 입장하지 않아도 돼요. 아래 기수 버튼이나 은하를 눌러 기록을 둘러보세요." }),
-      canPostAny() ? el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => openStarForm(null) }, "✦ 첫 기록 남기기")) : null);
+      canPostAny() ? el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => openStarForm(null) }, "첫 별 띄우기")) : null);
   } catch (err) { openUnlock(null, friendly(err)); }
 }
 renderChrome();
