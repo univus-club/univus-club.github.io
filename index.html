@@ -6,11 +6,11 @@
 <title>Univ-Us</title>
 <meta name="description" content="Univ-Us 대학연합동아리의 활동 기록. 기수마다 은하가 생기고, 활동 하나가 별 하나가 됩니다.">
 <meta property="og:title" content="Univ-Us">
-<meta property="og:description" content="우리가 함께 지나온 시간이 별이 되는 곳">
+<meta property="og:description" content="함께 만드는 우주">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b1430'/%3E%3Cpath d='M16 6l2.2 7.8L26 16l-7.8 2.2L16 26l-2.2-7.8L6 16l7.8-2.2z' fill='%23e9edf7'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gowun+Batang:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Song+Myung&family=Nanum+Myeongjo:wght@400;700&display=swap">
 <style>
 /* 관측 일지: 밤하늘은 화면 전체에 그대로 두고, 기록은 오른쪽(폰에서는 아래)에서 펼쳐지는
    푸른 모눈 노트에 잉크로 적어요. 하늘 위의 버튼은 종이 쪽지, 글씨는 분필처럼 흰색.
@@ -196,6 +196,36 @@ input::placeholder,textarea::placeholder{color:var(--ink-faint)}
   .stats{display:none}
 }
 @media (prefers-reduced-motion:reduce){ .panel{transition:none} }
+
+/* ===== 테마: 한밤 / 글꼴: 단정한 명조 (이 아래만 바꾸면 테마가 바뀌어요) ===== */
+:root{
+  --sky-0:#03050b; --sky-1:#0b1128;
+  --paper:#11162e; --paper-edge:#1b2142; --grid:transparent;
+  --ink:#e6e8f2; --ink-soft:#9aa0bf; --ink-faint:#6d7396; --ink-bright:#ffd98f;
+  --rule:rgba(170,176,230,.18); --ok:#8fe3b4; --err:#ff9a8a;
+  --f-hand:"Song Myung","Nanum Myeongjo",serif;
+  --f-text:"Nanum Myeongjo","AppleMyungjo","Batang",serif;
+  --map-label-scale:.72;
+}
+.panel{color-scheme:dark;background-image:none;box-shadow:-18px 0 40px rgba(0,0,0,.6);border-left:1px solid var(--rule)}
+.btn,.top .btn,.center-note .btn{background:var(--ink-bright);border-color:var(--ink-bright);color:#1a1405;box-shadow:none}
+.btn:hover,.top .btn:hover,.center-note .btn:hover{background:#ffe6b3;border-color:#ffe6b3;color:#1a1405}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+.btn.ghost:hover{background:rgba(255,255,255,.05);color:var(--ink-bright)}
+.photos button,.thumbs > div{background:var(--paper-edge)}
+.linkbox,textarea,.drop{background:rgba(0,0,0,.22)}
+.pick .opt.on{background:rgba(255,255,255,.06)}
+.banner code{background:rgba(255,255,255,.08)}
+.thumbs button{background:var(--ink-bright);color:#1a1405}
+/* 명조는 손글씨보다 커 보여서 제목 크기를 줄여요 */
+.brand h1{font-size:clamp(30px,3.6vw,38px);line-height:1.1}
+.panel h2{font-size:30px;line-height:1.25}
+.logrow .t{font-size:17px;line-height:1.45}
+.center-note h2{font-size:26px}
+@media (max-width:640px){
+  .panel{box-shadow:0 -14px 40px rgba(0,0,0,.6);border-left:0;border-top:1px solid var(--rule)}
+  .panel h2{font-size:27px}
+}
 </style>
 </head>
 <body>
@@ -204,7 +234,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-faint)}
 <header class="top">
   <div class="brand">
     <h1>Univ-Us</h1>
-    <p>우리가 함께 지나온 시간이 별이 되는 곳</p>
+    <p>함께 만드는 우주</p>
   </div>
   <div class="actions" id="actions"></div>
 </header>
