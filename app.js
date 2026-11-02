@@ -5,6 +5,15 @@
 
 /* ============================== 작은 도구들 ============================== */
 const $ = s => document.querySelector(s);
+// index.html의 :root 설정(글꼴, 하늘색)을 지도 그리기에도 그대로 써요
+const cssVar = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+const LOOK = {
+  hand: cssVar("--f-hand", '"Nanum Pen Script", serif'),
+  text: cssVar("--f-text", '"Gowun Batang", serif'),
+  sky0: cssVar("--sky-0", "#050914"),
+  sky1: cssVar("--sky-1", "#0e1a3a"),
+  scale: parseFloat(cssVar("--map-label-scale", "1")) || 1,
+};
 const el = (tag, props = {}, ...kids) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -447,7 +456,7 @@ function frame(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.globalCompositeOperation = "source-over";
   const bg = ctx.createRadialGradient(W * 0.5, H * 0.45, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.8);
-  bg.addColorStop(0, "#0e1a3a"); bg.addColorStop(1, "#050914");
+  bg.addColorStop(0, LOOK.sky1); bg.addColorStop(1, LOOK.sky0);
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = "#ffffff";
@@ -499,15 +508,15 @@ function frame(now) {
       const [cx, cy] = toScreen(g.x, g.y);
       const Rs = g.R * cam.z;
       ctx.fillStyle = `hsla(${g.hue},60%,88%,.92)`;
-      ctx.font = `${Math.round(Math.max(20, Math.min(30, 22 * cam.z + 12)))}px "Nanum Pen Script", "Gowun Batang", serif`;
+      ctx.font = `${Math.round(Math.max(20, Math.min(30, 22 * cam.z + 12)) * LOOK.scale)}px ${LOOK.hand}`;
       ctx.fillText(`${g.gen}기${g.name ? " " + g.name : ""}`, cx, cy + Rs + 24);
-      ctx.font = `12px "Gowun Batang", serif`;
+      ctx.font = `12px ${LOOK.text}`;
       ctx.fillStyle = "rgba(170,176,220,.7)";
       ctx.fillText(`별 ${g.stars.length}개`, cx, cy + Rs + 42);
     }
   }
   if (cam.z > 1.05) {
-    ctx.font = `19px "Nanum Pen Script", "Gowun Batang", serif`;
+    ctx.font = `${Math.round(19 * LOOK.scale)}px ${LOOK.hand}`;
     ctx.shadowColor = "rgba(5,9,20,.95)"; ctx.shadowBlur = 6;
     ctx.textAlign = "left";
     for (const h of hits) {
@@ -875,7 +884,7 @@ function starLookPicker(shape0, color0, getGen, getTitle) {
     const t = (getTitle() || "").trim() || "오늘의 별";
     paint(preview, 320, 96, 120, 48, 5.2, shape, color, true);
     const c = preview.getContext("2d");
-    c.font = '22px "Nanum Pen Script", "Gowun Batang", serif'; c.fillStyle = "rgba(233,237,247,.92)"; c.textAlign = "left";
+    c.font = `${Math.round(22 * LOOK.scale)}px ${LOOK.hand}`; c.fillStyle = "rgba(233,237,247,.92)"; c.textAlign = "left";
     c.fillText(t.length > 14 ? t.slice(0, 13) + "…" : t, 150, 53);
     shapeBoxes.forEach(b => { paint(b.cv, 34, 34, 17, 17, 3.4, b.sh.id, color, false); b.label.classList.toggle("on", b.sh.id === shape); });
     colorBoxes.forEach(b => { b.dot.style.background = tintOf(b.co.id, hue())(1); b.label.classList.toggle("on", b.co.id === color); });
