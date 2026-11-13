@@ -206,6 +206,36 @@ input::placeholder,textarea::placeholder{color:var(--color-faint)}
 .msg.ok{color:var(--color-success)}
 .fine{font-size:var(--text-sm);color:var(--color-faint);margin:0}
 
+/* ---------- 다음 궤도 ---------- */
+.btn .count{font:500 var(--text-sm)/1 var(--font-body);font-variant-numeric:tabular-nums;color:var(--color-accent)}
+.idea-form{gap:var(--space-2);padding-bottom:var(--space-5);border-bottom:var(--rule-hair) solid var(--color-rule)}
+.idea-form textarea{min-height:72px}
+.ideas{display:flex;flex-direction:column}
+.ideas h3{font:400 var(--text-lg)/1.2 var(--font-display);color:var(--color-muted);margin:var(--space-4) 0 var(--space-1)}
+.ideas h3:first-child{margin-top:0}
+.idea{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-1) var(--space-3);padding:var(--space-3) 0;border-bottom:var(--rule-hair) solid var(--color-rule);align-items:start}
+.idea .t{font:400 var(--text-xl)/1.25 var(--font-display);color:var(--color-ink);min-width:0;overflow-wrap:break-word}
+.idea .d{grid-column:1;margin:0;font-size:var(--text-sm);color:var(--color-ink-2);overflow-wrap:break-word}
+.idea .m{grid-column:1;font-size:var(--text-xs);color:var(--color-faint)}
+.idea .acts{grid-column:1 / -1;display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center;margin-top:var(--space-1)}
+.idea.old .t,.idea.old .d{color:var(--color-faint)}
+.idea.done .t{color:var(--color-success)}
+.stamp.ok{border-color:var(--color-success);color:var(--color-success)}
+.idea.flash{animation:idea-flash 1.2s var(--ease-out)}
+@keyframes idea-flash{from{background:var(--color-accent-tint)}to{background:transparent}}
+.cheer{grid-row:1 / span 3;grid-column:2;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:56px;min-height:var(--control-h);padding:var(--space-1) var(--space-2);border:var(--rule-hair) solid var(--color-rule-strong);border-radius:var(--radius);background:transparent;color:var(--color-muted);cursor:pointer;transition:background-color var(--dur-micro) var(--ease-out),border-color var(--dur-micro) var(--ease-out)}
+.cheer b{font:400 var(--text-xl)/1 var(--font-display);color:var(--color-ink);font-variant-numeric:tabular-nums}
+.cheer span{font-size:var(--text-xs)}
+.cheer:hover{border-color:var(--color-ink);background:var(--color-hover)}
+.cheer:active{background:var(--color-paper-3)}
+.cheer[aria-pressed="true"]{border-color:var(--color-accent);background:var(--color-accent-tint);color:var(--color-accent)}
+.cheer[aria-pressed="true"] b{color:var(--color-accent)}
+.cheer:disabled{border-color:var(--color-rule);color:var(--color-faint);background:transparent;cursor:not-allowed}
+.cheer:disabled b{color:var(--color-faint)}
+.linkish{border:0;background:none;padding:0;color:var(--color-ink-2);font:inherit;text-decoration:underline;text-decoration-color:var(--color-rule-strong);text-underline-offset:.16em;cursor:pointer}
+.linkish:hover{color:var(--color-ink);text-decoration-color:var(--color-accent)}
+.linkish:active{color:var(--color-accent)}
+
 .lightbox{position:fixed;inset:0;background:var(--color-scrim);z-index:10;display:grid;place-items:center;padding:var(--space-4);cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;object-fit:contain}
 
@@ -219,7 +249,7 @@ input::placeholder,textarea::placeholder{color:var(--color-faint)}
   .two{grid-template-columns:minmax(0,1fr)}
   .stats{display:none}
 }
-@media (prefers-reduced-motion:reduce){ .panel,.btn{transition:none} .btn:active,.btn.ghost:active,.btn.danger:active{transform:none} }
+@media (prefers-reduced-motion:reduce){ .panel,.btn,.cheer{transition:none} .idea.flash{animation:none} .btn:active,.btn.ghost:active,.btn.danger:active{transform:none} }
 </style>
 </head>
 <body>
