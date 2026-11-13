@@ -1310,9 +1310,13 @@ async function joinFromLink() {
   const m = /^#join=([0-9A-Za-z-]{16,24})$/.exec(location.hash);
   if (!m) return;
   history.replaceState(null, "", location.pathname + location.search);
+  // 이미 이 링크로 입장해 있던 기기면 환영 창을 다시 띄우지 않아요
+  const before = S.role + "|" + S.gens.slice().sort((a, b) => a - b).join(",");
   try {
     const r = await enterWith(m[1]);
     if (!r.ok) return openUnlock(null, "이 입장 링크는 더 이상 쓸 수 없어요. 단톡방 공지에서 최신 링크를 받아 주세요.");
+    const after = S.role + "|" + S.gens.slice().sort((a, b) => a - b).join(",");
+    if (before === after) return;
     show({ type: "joined" }, "Access", head("어서 와요"),
       el("p", { class: "msg ok", text: r.text }),
       el("p", { class: "fine", text: "이 기기에서는 다시 입장하지 않아도 돼요. 아래 기수 버튼이나 은하를 눌러 기록을 둘러보세요." }),
