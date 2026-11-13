@@ -23,7 +23,7 @@ const el = (tag, props = {}, ...kids) => {
     else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
     else n.setAttribute(k, v === true ? "" : v);
   }
-  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) n.append(c);
+  for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.append(c);
   return n;
 };
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -57,6 +57,8 @@ function friendly(e) {
   if (/admin_locked/.test(m)) return "운영진 비밀번호 시도가 몰려서 운영진 입장이 잠시 잠겼어요. 10분 뒤에 다시 시도해 주세요. 부원 입장은 영향이 없어요.";
   if (/code_like/.test(m)) return "운영진 비밀번호는 입장 코드(영문·숫자 16자)처럼 생기면 안 돼요. 한글이나 특수문자, 단어를 섞어 주세요.";
   if (/too_short/.test(m)) return "운영진 비밀번호는 12자 이상이어야 해요. 단어 3~4개를 이어 붙이면 기억하기 쉬워요.";
+  if (/idea_limit/.test(m)) return "의견은 하루에 5개까지 올릴 수 있어요. 내일 다시 올려 주세요.";
+  if (/idea_closed/.test(m)) return "이미 별이 된 의견이라 공감할 수 없어요.";
   if (/daily_limit/.test(m)) return "하루에 올릴 수 있는 기록은 10개까지예요. 내일 다시 올려 주세요.";
   if (/photo_limit/.test(m)) return "별 하나에 사진은 10장까지 올릴 수 있어요.";
   if (/forbidden|row-level security|permission/i.test(m)) return "이 일을 할 권한이 없어요. 우리 기수 입장 링크(운영진은 운영진 비밀번호)로 다시 입장해 보세요.";
@@ -184,6 +186,19 @@ function makeSupabaseApi(cfg) {
     async setAdminPassword(pw) { must(await sb.rpc("set_admin_password", { pw })); },
     async resetMembers() { must(await sb.rpc("reset_members")); },
     async signOut() { await sb.auth.signOut(); },
+    // 다음 궤도: 작성자는 DB가 숨기고, "내 의견/내 공감"만 함수로 받아요
+    async listIdeas() {
+      const [a, b, c] = await Promise.all([
+        sb.from("ideas").select("id,title,body,created_at,status,star_id,cheers").order("created_at", { ascending: false }),
+        sb.rpc("my_ideas"), sb.rpc("my_cheers"),
+      ]);
+      const mine = new Set((must(b) || []).map(r => r.id)), cheered = new Set((must(c) || []).map(r => r.idea_id));
+      return (must(a) || []).map(i => ({ ...i, mine: mine.has(i.id), cheered: cheered.has(i.id) }));
+    },
+    async addIdea(title, body) { must(await sb.from("ideas").insert({ title, body })); },
+    async deleteIdea(id) { must(await sb.from("ideas").delete().eq("id", id)); },
+    async toggleCheer(id) { return must(await sb.rpc("toggle_cheer", { i: id })); },
+    async launchIdea(id, starId) { must(await sb.rpc("launch_idea", { i: id, s: starId })); },
   };
 }
 
@@ -215,6 +230,16 @@ function makeDemoApi() {
   const times = new Map([[1, "2026-03-01T00:00:00Z"], [2, "2026-03-01T00:00:00Z"]]);
   const randomCode = () => { const a = "0123456789ABCDEFGHJKMNPQRSTVWXYZ", b = crypto.getRandomValues(new Uint8Array(16)); return [...b].map(x => a[x & 31]).join(""); };
   const me = "demo-me";
+  const ago = d => new Date(Date.now() - d * 864e5).toISOString();
+  const ideas = [
+    { id: "idea-1", title: "기말 끝나고 종강 번개 (곱창)", body: "12월 셋째 주 금요일쯤 어때요?", created_at: ago(2), status: "open", star_id: null, cheers: 12, by: null },
+    { id: "idea-2", title: "11월 정모는 방탈출 카페", body: "4~5명씩 팀 나눠서 기록 대결", created_at: ago(4), status: "open", star_id: null, cheers: 7, by: null },
+    { id: "idea-3", title: "보드게임 카페 정모", body: "", created_at: ago(9), status: "open", star_id: null, cheers: 5, by: null },
+    { id: "idea-4", title: "연합 해커톤 같이 나갈 팀 짜기", body: "1월 대회 공지 뜨면 같이 봐요", created_at: ago(6), status: "open", star_id: null, cheers: 3, by: null },
+    { id: "idea-5", title: "강릉 바다로 봄 MT", body: "", created_at: ago(210), status: "done", star_id: "demo-8", cheers: 9, by: null },
+    { id: "idea-6", title: "여름 수박 번개", body: "", created_at: ago(74), status: "open", star_id: null, cheers: 2, by: null },
+  ];
+  const cheersBy = new Set();
   let role = "guest", gens = [];
   const wait = (v) => new Promise(r => setTimeout(() => r(v), 120));
   const needAdmin = () => { if (role !== "admin") throw new Error("forbidden"); };
@@ -274,13 +299,37 @@ function makeDemoApi() {
     },
     async resetMembers() { needAdmin(); return wait(); },
     async signOut() { role = "guest"; gens = []; return wait(); },
+    async listIdeas() {
+      if (role === "guest") throw new Error("forbidden");
+      return wait(ideas.map(i => ({ id: i.id, title: i.title, body: i.body, created_at: i.created_at, status: i.status, star_id: i.star_id, cheers: i.cheers, mine: i.by === me, cheered: cheersBy.has(i.id) })));
+    },
+    async addIdea(title, body) {
+      if (role === "guest") throw new Error("forbidden");
+      if (role !== "admin" && ideas.filter(i => i.by === me && Date.now() - new Date(i.created_at) < 864e5).length >= 5) throw new Error("idea_limit");
+      ideas.unshift({ id: "idea-" + uuid(), title, body, created_at: new Date().toISOString(), status: "open", star_id: null, cheers: 0, by: me });
+      return wait();
+    },
+    async deleteIdea(id) {
+      const i = ideas.findIndex(x => x.id === id);
+      if (i < 0) return wait();
+      if (role !== "admin" && !(role === "member" && ideas[i].by === me)) throw new Error("forbidden");
+      ideas.splice(i, 1); return wait();
+    },
+    async toggleCheer(id) {
+      if (role === "guest") throw new Error("forbidden");
+      const i = ideas.find(x => x.id === id);
+      if (!i || i.status !== "open") throw new Error("idea_closed");
+      if (cheersBy.has(id)) { cheersBy.delete(id); i.cheers--; } else { cheersBy.add(id); i.cheers++; }
+      return wait(i.cheers);
+    },
+    async launchIdea(id, starId) { needAdmin(); const i = ideas.find(x => x.id === id); if (i) { i.status = "done"; i.star_id = starId; } return wait(); },
   };
 }
 
 /* ============================== 상태와 모델 ============================== */
 const S = {
   api: null, role: "guest", gens: [], uid: null,
-  galaxies: [], stars: [], loaded: false, loadError: null,
+  galaxies: [], stars: [], loaded: false, loadError: null, ideas: [], hoverIdea: null,
   view: null, hover: null,
 };
 const isMember = () => S.role === "member" || S.role === "admin";
@@ -292,6 +341,18 @@ const canManage = s => isAdmin() || (isMember() && isMine(s));                  
 async function refreshMe() {
   try { const me = await S.api.myRole(); S.role = me.role; S.gens = me.gens || []; S.uid = me.uid; }
   catch { S.role = "guest"; S.gens = []; S.uid = null; }
+}
+/* 다음 궤도: 60일 넘게 별이 되지 않은 의견은 '지난 의견'으로 */
+const IDEA_DAYS = 60;
+const ideaAgeDays = i => Math.floor((Date.now() - new Date(i.created_at).getTime()) / 864e5);
+const isOldIdea = i => i.status === "open" && ideaAgeDays(i) > IDEA_DAYS;
+const liveIdeas = () => S.ideas.filter(i => i.status === "open" && !isOldIdea(i));
+const orbitGalaxy = () => (isMember() && liveIdeas().length && S.galaxies.length ? S.galaxies[S.galaxies.length - 1] : null);
+async function loadIdeas() {
+  if (!S.api || !isMember()) { S.ideas = []; renderChrome(); return; }
+  try { S.ideas = await S.api.listIdeas(); } catch { S.ideas = []; }
+  renderChrome();
+  if (S.view && S.view.type === "ideas") openIdeasView(null, false);
 }
 const NAME_KEY = "univus-author-name";
 const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ""; } catch { return ""; } };
@@ -444,7 +505,7 @@ addEventListener("resize", resize); resize();
 const toScreen = (x, y) => [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2];
 const toWorld = (sx, sy) => [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y];
 
-let hits = [];
+let hits = [], ideaHits = [];
 function frame(now) {
   const t = now - t0;
   if (target.on) {
@@ -502,6 +563,42 @@ function frame(now) {
   }
   ctx.globalCompositeOperation = "source-over";
 
+  // 다음 궤도: 가장 최근 은하 둘레의 점선 궤도와 아직 뜨지 않은 별(의견)
+  ideaHits = [];
+  const og = orbitGalaxy();
+  if (og) {
+    const live = liveIdeas().slice().sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    const [ox, oy] = toScreen(og.x, og.y);
+    const OR = og.R * 1.45 * cam.z;
+    ctx.setLineDash([3, 6]); ctx.strokeStyle = "rgba(255,217,143,.3)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(ox, oy, OR, OR * 0.82, 0, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+    if (cam.z < 1.6) {
+      ctx.font = `13px ${LOOK.text}`; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,217,143,.7)";
+      ctx.fillText("다음 궤도", ox, oy - OR * 0.82 - 10);
+    }
+    const maxC = Math.max(8, ...live.map(i => i.cheers));
+    const zs = Math.max(0.7, Math.min(1.6, cam.z * 1.2));
+    live.forEach((i, k) => {
+      const a = -Math.PI / 2 + (k + 0.5) / live.length * 6.2832 + rot * 0.5;
+      const x = ox + Math.cos(a) * OR, y = oy + Math.sin(a) * OR * 0.82;
+      const p = Math.min(1, i.cheers / maxC), alpha = 0.3 + 0.7 * p, r = (6 + 12 * p) * zs * (S.hoverIdea === i.id ? 1.3 : 1);
+      ctx.globalCompositeOperation = "lighter";
+      const gl = ctx.createRadialGradient(x, y, 0, x, y, r);
+      gl.addColorStop(0, `rgba(255,244,220,${0.9 * alpha})`); gl.addColorStop(0.3, `rgba(255,217,143,${0.45 * alpha})`); gl.addColorStop(1, "rgba(255,217,143,0)");
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = `rgba(255,236,200,${0.35 + 0.5 * alpha})`; ctx.setLineDash([2, 2]);
+      ctx.beginPath(); ctx.arc(x, y, 3.2 * zs, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      if (S.hoverIdea === i.id || (p > 0.6 && cam.z > 0.5)) {
+        ctx.font = `${Math.round(17 * LOOK.scale)}px ${LOOK.hand}`; ctx.textAlign = "left"; ctx.fillStyle = "rgba(233,237,247,.85)";
+        ctx.shadowColor = "rgba(5,9,20,.95)"; ctx.shadowBlur = 6;
+        ctx.fillText(i.title.length > 14 ? i.title.slice(0, 13) + "…" : i.title, x + 12, y + 4);
+        ctx.shadowBlur = 0;
+      }
+      ideaHits.push({ x, y, idea: i });
+    });
+  }
+
   ctx.textAlign = "center";
   if (cam.z < 1.6) {
     for (const g of S.galaxies) {
@@ -545,7 +642,11 @@ function flyTo(x, y, z) {
 function fitAll() {
   if (!S.galaxies.length) { flyTo(0, 0, 1); return; }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const g of S.galaxies) { x0 = Math.min(x0, g.x - g.R); y0 = Math.min(y0, g.y - g.R); x1 = Math.max(x1, g.x + g.R); y1 = Math.max(y1, g.y + g.R); }
+  const og = orbitGalaxy();
+  for (const g of S.galaxies) {
+    const R = g === og ? g.R * 1.5 : g.R;   // 다음 궤도까지 화면에 들어오게
+    x0 = Math.min(x0, g.x - R); y0 = Math.min(y0, g.y - R); x1 = Math.max(x1, g.x + R); y1 = Math.max(y1, g.y + R);
+  }
   const z = Math.min((W - 80) / (x1 - x0 + 120), (H - 220) / (y1 - y0 + 160), 1.4);
   flyTo((x0 + x1) / 2, (y0 + y1) / 2, z);
 }
@@ -580,8 +681,9 @@ cv.addEventListener("pointermove", e => {
     return;
   }
   const h = hitTest(e.clientX, e.clientY);
-  S.galaxies.forEach(g => { g.hover = !!(h && !h.s && h.g === g); });
+  S.galaxies.forEach(g => { g.hover = !!(h && !h.s && !h.idea && h.g === g); });
   S.hover = h && h.s ? h.s.id : null;
+  S.hoverIdea = h && h.idea ? h.idea.id : null;
   cv.classList.toggle("pointing", !!h);
 });
 function endPtr(e) {
@@ -591,7 +693,8 @@ function endPtr(e) {
     cv.classList.remove("dragging");
     if (!moved && drag) {
       const h = hitTest(e.clientX, e.clientY);
-      if (h && h.s) openStar(h.s.id, true);
+      if (h && h.idea) openIdeasView(h.idea.id);
+      else if (h && h.s) openStar(h.s.id, true);
       else if (h) openGalaxy(h.g.gen, true);
     }
     drag = null;
@@ -609,6 +712,7 @@ cv.addEventListener("wheel", e => {
 }, { passive: false });
 function hitTest(sx, sy) {
   let best = null, bd = 16;
+  for (const h of ideaHits) { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; best = h; } }
   for (const h of hits) { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; best = h; } }
   if (best) return best;
   const [wx, wy] = toWorld(sx, sy);
@@ -623,6 +727,10 @@ function renderChrome() {
   const acts = [stats];
   if (canPostAny()) {
     acts.push(el("button", { class: "btn", type: "button", onclick: () => openStarForm(null, S.view && S.view.gen) }, "별 띄우기"));
+  }
+  if (isMember()) {
+    const n = liveIdeas().length;
+    acts.push(el("button", { class: "btn ghost", type: "button", onclick: () => openIdeasView() }, "다음 궤도", n ? el("small", { class: "count", text: String(n) }) : null));
   }
   if (isAdmin()) {
     acts.push(el("button", { class: "btn ghost", type: "button", onclick: openSettings }, "운영"));
@@ -684,6 +792,7 @@ function refreshView() {
   const v = S.view;
   if (!v) return;
   if (v.type === "galaxy") openGalaxy(v.gen, false);
+  else if (v.type === "ideas") openIdeasView(null, false);
   else if (v.type === "star") { if (S.stars.some(s => s.id === v.id)) openStar(v.id, false); else if (v.gen) openGalaxy(v.gen, false); else closePanel(); }
 }
 // 손글씨 제목 + (있으면) 그 아래 한 줄 설명
@@ -803,6 +912,7 @@ async function enterWith(value) {
     ? "입장 코드가 맞지 않거나 새 코드로 바뀌었어요. 단톡방 공지의 최신 입장 링크를 눌러 주세요."
     : "운영진 비밀번호가 맞지 않아요. 부원이라면 단톡방 공지의 입장 링크를 눌러 주세요." };
   await refreshMe();
+  await loadIdeas();
   renderChrome();
   const mine = S.gens.slice().sort((a, b) => a - b).map(g => `${g}기`).join(", ");
   return { ok: true, role, text: role === "admin" && !looksLikeCode(value)
@@ -847,7 +957,7 @@ function openAccount() {
 }
 async function signOut() {
   await S.api.signOut().catch(() => {});
-  S.role = "guest"; S.gens = []; S.uid = null; closePanel(); renderChrome();
+  S.role = "guest"; S.gens = []; S.uid = null; S.ideas = []; closePanel(); renderChrome();
 }
 
 /* ---------- 별 추가/고치기 (운영진) ---------- */
@@ -898,7 +1008,7 @@ function starLookPicker(shape0, color0, getGen, getTitle) {
   return { el: wrap, redraw, shape: () => shape, color: () => color };
 }
 
-function openStarForm(star, presetGen) {
+function openStarForm(star, presetGen, fromIdea) {
   const editing = !!star;
   if (editing ? !canManage(star) : !canPostAny()) return isMember() ? openAccount() : openUnlock();
   if (!S.galaxies.length) return openSettings();
@@ -908,7 +1018,7 @@ function openStarForm(star, presetGen) {
   const sel = el("select", { id: "f-gen" }, allowed.map(g => el("option", { value: String(g.gen), selected: g.gen === gen }, `${g.gen}기${g.name ? " " + g.name : ""}`)));
   const author = el("input", { type: "text", id: "f-author", maxlength: "20", value: editing ? "" : savedName(), placeholder: "예: 홍길동 (비워도 돼요)" });
   const date = el("input", { type: "date", id: "f-date", value: editing ? star.date : todaySeoul(), required: true });
-  const title = el("input", { type: "text", id: "f-title", maxlength: "60", value: editing ? star.title : "", placeholder: "예: 봄 MT", required: true });
+  const title = el("input", { type: "text", id: "f-title", maxlength: "60", value: editing ? star.title : (fromIdea ? fromIdea.title : ""), placeholder: "예: 봄 MT", required: true });
   const body = el("textarea", { id: "f-body", maxlength: "5000", placeholder: "무엇을 했고, 어떤 순간이 기억에 남았나요?" });
   const look = starLookPicker(editing ? star.shape : "spark", editing ? star.color : "galaxy", () => parseInt(sel.value, 10), () => title.value);
   sel.addEventListener("change", look.redraw);
@@ -962,13 +1072,97 @@ function openStarForm(star, presetGen) {
       });
       pending.forEach(p => URL.revokeObjectURL(p.url));
       if (!editing && author.value.trim()) rememberName(author.value.trim());
+      if (fromIdea) { try { await S.api.launchIdea(fromIdea.id, id); } catch {} await loadIdeas(); }
       S.view = { type: "star", id };
       await reload();
       openStar(id, true);
     } catch (err) { say(m, friendly(err)); submit.disabled = false; submit.textContent = editing ? "고친 내용 저장" : "별 띄우기"; }
   });
-  show({ type: "form", gen, back: editing ? () => openStar(star.id, false) : null }, editing ? "Edit star" : "New star",
-    head(editing ? "별 고치기" : "오늘의 별", editing ? star.title : "무엇을 했는지 적어 두면 하늘에 별이 하나 생겨요."), form);
+  show({ type: "form", gen, back: editing ? () => openStar(star.id, false) : (fromIdea ? () => openIdeasView(fromIdea.id) : null) }, editing ? "Edit star" : "New star",
+    head(editing ? "별 고치기" : "오늘의 별", editing ? star.title
+      : fromIdea ? "다음 궤도의 의견을 별로 띄워요. 사진과 일지를 넣고 저장하면 의견에 '별이 됨'이 표시돼요."
+      : "무엇을 했는지 적어 두면 하늘에 별이 하나 생겨요."), form);
+}
+
+/* ---------- 다음 궤도 (익명 활동 제안) ---------- */
+const agoText = iso => { const d = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5); return d <= 0 ? "오늘" : d === 1 ? "어제" : d < 30 ? `${d}일 전` : fmtDateKo(String(iso).slice(0, 10)); };
+async function openIdeasView(focusId, fresh = true) {
+  if (!isMember()) return openUnlock();
+  if (fresh) {
+    show({ type: "ideas" }, "Next orbit", head("다음 궤도"), el("p", { class: "fine", text: "불러오는 중…" }));
+    try { S.ideas = await S.api.listIdeas(); } catch (e) { return show({ type: "ideas" }, "Next orbit", head("다음 궤도"), el("p", { class: "msg err", text: friendly(e) })); }
+    renderChrome();
+  }
+  const keep = pbody.scrollTop;
+  // 쓰기
+  const t = el("input", { type: "text", id: "i-title", maxlength: "50", placeholder: "예: 기말 끝나고 종강 번개", autocomplete: "off" });
+  const b = el("textarea", { id: "i-body", maxlength: "300", placeholder: "조금 더 설명 (선택)", rows: "3" });
+  const m = msg();
+  const go = el("button", { class: "btn", type: "submit" }, "궤도에 올리기");
+  const form = el("form", { class: "idea-form" }, el("label", {}, "하고 싶은 활동", t), b, m,
+    el("div", { class: "row" }, go, el("span", { class: "fine", text: "누가 썼는지는 운영진도 볼 수 없어요." })));
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!t.value.trim()) { say(m, "하고 싶은 활동을 적어 주세요."); t.focus(); return; }
+    go.disabled = true;
+    try { await S.api.addIdea(t.value.trim(), b.value.trim()); await loadIdeas(); say($("#ideaNote") || m, "궤도에 올렸어요. 공감을 받을수록 하늘에서 밝게 빛나요.", true); }
+    catch (err) { say(m, friendly(err)); go.disabled = false; }
+  });
+  // 목록
+  const open = liveIdeas().sort((a, c) => c.cheers - a.cheers || (a.created_at < c.created_at ? 1 : -1));
+  const done = S.ideas.filter(i => i.status === "done");
+  const old = S.ideas.filter(isOldIdea);
+  const list = el("div", { class: "ideas" },
+    el("h3", { text: open.length ? `떠 있는 의견 ${open.length}개` : "떠 있는 의견" }),
+    open.length ? open.map(ideaRow) : el("p", { class: "empty-line", text: "아직 올라온 의견이 없어요. 다음 정모나 번개로 하고 싶은 걸 첫 번째로 올려 보세요." }),
+    done.length ? [el("h3", { text: "별이 된 의견" }), done.map(ideaRow)] : null,
+    old.length ? [el("h3", { text: `지난 의견 (${IDEA_DAYS}일 지남)` }), old.map(ideaRow)] : null);
+  show({ type: "ideas" }, "Next orbit",
+    head("다음 궤도", "다음 정모나 번개로 하고 싶은 걸 이름 없이 올려요. 공감을 많이 받을수록 하늘에서 밝게 빛나고, 실제로 하면 진짜 별이 돼요."),
+    form, el("p", { class: "msg", id: "ideaNote", hidden: true }), list);
+  pbody.scrollTop = fresh ? 0 : keep;
+  if (focusId) {
+    const row = pbody.querySelector(`[data-idea="${CSS.escape(focusId)}"]`);
+    if (row) { row.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" }); row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash"); }
+  }
+  const og = orbitGalaxy();
+  if (fresh && og) flyTo(og.x, og.y, Math.min(W, H) * 0.3 / (og.R * 1.5));
+}
+function ideaRow(i) {
+  const done = i.status === "done", old = isOldIdea(i);
+  const row = el("div", { class: "idea" + (old ? " old" : "") + (done ? " done" : ""), "data-idea": i.id });
+  const title = el("div", { class: "t" }, i.title,
+    i.mine ? el("span", { class: "stamp", text: "내 의견" }) : null,
+    done ? el("span", { class: "stamp ok", text: "별이 됨" }) : null);
+  const star = done && i.star_id ? S.stars.find(s => s.id === i.star_id) : null;
+  const meta = el("div", { class: "m" }, agoText(i.created_at),
+    star ? [", ", el("button", { class: "linkish", type: "button", onclick: () => openStar(star.id, true) }, `${star.gen}기 은하의 별 보기`)] : null);
+  const cheer = el("button", { class: "cheer", type: "button", "aria-pressed": i.cheered ? "true" : "false",
+    "aria-label": `공감 ${i.cheers}개${i.cheered ? ", 내가 공감함" : ""}`, disabled: done || old },
+    el("b", { text: String(i.cheers) }), el("span", { text: i.cheered ? "공감함" : "공감" }));
+  cheer.addEventListener("click", async () => {
+    cheer.disabled = true;
+    try { i.cheers = await S.api.toggleCheer(i.id); i.cheered = !i.cheered; renderChrome(); openIdeasView(null, false); }
+    catch (err) { cheer.disabled = false; const n = $("#ideaNote"); if (n) say(n, friendly(err)); }
+  });
+  row.append(title, cheer);
+  if (i.body) row.append(el("p", { class: "d", text: i.body }));
+  row.append(meta);
+  const acts = el("div", { class: "acts" });
+  if (isAdmin() && !done) acts.append(el("button", { class: "btn small", type: "button", onclick: () => openStarForm(null, S.galaxies.length ? S.galaxies[S.galaxies.length - 1].gen : undefined, { id: i.id, title: i.title }) }, "별로 띄우기"));
+  if (!done && (i.mine || isAdmin())) {
+    const wrap = el("span", { class: "row" });
+    const idle = () => wrap.replaceChildren(el("button", { class: "btn ghost small", type: "button", onclick: ask }, "지우기"));
+    const ask = () => wrap.replaceChildren(
+      el("span", { class: "confirm", text: "이 의견을 지울까요?" }),
+      el("button", { class: "btn danger small", type: "button", onclick: async () => {
+        try { await S.api.deleteIdea(i.id); await loadIdeas(); } catch (err) { idle(); const n = $("#ideaNote"); if (n) say(n, friendly(err)); }
+      } }, "지우기"),
+      el("button", { class: "btn ghost small", type: "button", onclick: idle }, "취소"));
+    idle(); acts.append(wrap);
+  }
+  if (acts.childElementCount) row.append(acts);
+  return row;
 }
 
 /* ---------- 운영 설정 (운영진) ---------- */
@@ -1104,6 +1298,7 @@ async function boot() {
   }
   await refreshMe();
   await reload();
+  await loadIdeas();
   fitAll();
   if (reduceMotion) { cam.x = target.x; cam.y = target.y; cam.z = target.z; }
   joinFromLink();
