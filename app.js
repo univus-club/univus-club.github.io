@@ -563,32 +563,58 @@ function frame(now) {
   }
   ctx.globalCompositeOperation = "source-over";
 
-  // 다음 궤도: 가장 최근 은하 둘레의 점선 궤도와 아직 뜨지 않은 별(의견)
+  // 다음 궤도: 가장 최근 은하 둘레의 먼지 고리와, 아직 뜨지 않은 별(의견)
   ideaHits = [];
   const og = orbitGalaxy();
   if (og) {
     const live = liveIdeas().slice().sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
     const [ox, oy] = toScreen(og.x, og.y);
-    const OR = og.R * 1.45 * cam.z;
-    ctx.setLineDash([3, 6]); ctx.strokeStyle = "rgba(255,217,143,.3)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(ox, oy, OR, OR * 0.82, 0, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+    const OR = og.R * 1.45 * cam.z, TILT = -0.32, SQ = 0.62;
+    // 기울어진 타원 위의 점 (은하를 비스듬히 내려다본 느낌)
+    const onOrbit = (a, rr = 1) => {
+      const ex = Math.cos(a) * OR * rr, ey = Math.sin(a) * OR * SQ * rr;
+      return [ox + ex * Math.cos(TILT) - ey * Math.sin(TILT), oy + ex * Math.sin(TILT) + ey * Math.cos(TILT)];
+    };
+    const GOLD = "255,217,143";
+    {
+      // 먼지 고리: 금빛 먼지가 궤도를 따라 천천히 돌아요
+      if (!og._ring) {
+        let sd = 7; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+        og._ring = [];
+        for (let k = 0; k < 380; k++) og._ring.push({ a: rnd() * 6.2832, r: 1 + (rnd() + rnd() - 1) * 0.07, s: rnd() * 1.2 + 0.5, al: rnd() * 0.5 + 0.15, tw: rnd() * 6.28 });
+      }
+      ctx.globalCompositeOperation = "lighter";
+      for (const d of og._ring) {
+        const [x, y] = onOrbit(d.a + rot * 0.6, d.r);
+        ctx.fillStyle = `rgba(${GOLD},${d.al * (reduceMotion ? 1 : 0.75 + 0.25 * Math.sin(t * 0.0012 + d.tw))})`;
+        ctx.fillRect(x, y, d.s, d.s);
+      }
+      ctx.globalCompositeOperation = "source-over";
+    }
     if (cam.z < 1.6) {
-      ctx.font = `13px ${LOOK.text}`; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,217,143,.7)";
-      ctx.fillText("다음 궤도", ox, oy - OR * 0.82 - 10);
+      const [lx, ly] = onOrbit(-Math.PI / 2);
+      ctx.font = `12px ${LOOK.text}`; ctx.textAlign = "center"; ctx.fillStyle = `rgba(${GOLD},.6)`;
+      if ("letterSpacing" in ctx) ctx.letterSpacing = "3px";
+      ctx.fillText("다음 궤도", lx, ly - 12);
+      if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
     }
     const maxC = Math.max(8, ...live.map(i => i.cheers));
     const zs = Math.max(0.7, Math.min(1.6, cam.z * 1.2));
     live.forEach((i, k) => {
-      const a = -Math.PI / 2 + (k + 0.5) / live.length * 6.2832 + rot * 0.5;
-      const x = ox + Math.cos(a) * OR, y = oy + Math.sin(a) * OR * 0.82;
-      const p = Math.min(1, i.cheers / maxC), alpha = 0.3 + 0.7 * p, r = (6 + 12 * p) * zs * (S.hoverIdea === i.id ? 1.3 : 1);
+      const a = -Math.PI / 2 + (k + 0.5) / live.length * 6.2832 + rot * 0.6;
+      const [x, y] = onOrbit(a);
+      const p = Math.min(1, i.cheers / maxC), alpha = 0.35 + 0.65 * p;
+      const tw = reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(t * 0.002 + k * 2.1);
+      const r = (7 + 13 * p) * zs * (S.hoverIdea === i.id ? 1.3 : 1);
       ctx.globalCompositeOperation = "lighter";
       const gl = ctx.createRadialGradient(x, y, 0, x, y, r);
-      gl.addColorStop(0, `rgba(255,244,220,${0.9 * alpha})`); gl.addColorStop(0.3, `rgba(255,217,143,${0.45 * alpha})`); gl.addColorStop(1, "rgba(255,217,143,0)");
+      gl.addColorStop(0, `rgba(255,244,220,${0.85 * alpha * tw})`); gl.addColorStop(0.3, `rgba(${GOLD},${0.35 * alpha * tw})`); gl.addColorStop(1, `rgba(${GOLD},0)`);
       ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      // 아직 뜨지 않은 별: 가는 네 갈래 반짝임
+      const L = (3 + 5 * p) * zs * tw;
+      ctx.strokeStyle = `rgba(255,240,210,${0.5 + 0.5 * alpha})`; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(x - L, y); ctx.lineTo(x + L, y); ctx.moveTo(x, y - L); ctx.lineTo(x, y + L); ctx.stroke();
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = `rgba(255,236,200,${0.35 + 0.5 * alpha})`; ctx.setLineDash([2, 2]);
-      ctx.beginPath(); ctx.arc(x, y, 3.2 * zs, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
       if (S.hoverIdea === i.id || (p > 0.6 && cam.z > 0.5)) {
         ctx.font = `${Math.round(17 * LOOK.scale)}px ${LOOK.hand}`; ctx.textAlign = "left"; ctx.fillStyle = "rgba(233,237,247,.85)";
         ctx.shadowColor = "rgba(5,9,20,.95)"; ctx.shadowBlur = 6;
@@ -644,7 +670,7 @@ function fitAll() {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   const og = orbitGalaxy();
   for (const g of S.galaxies) {
-    const R = g === og ? g.R * 1.5 : g.R;   // 다음 궤도까지 화면에 들어오게
+    const R = g === og ? g.R * 1.6 : g.R;   // 다음 궤도까지 화면에 들어오게
     x0 = Math.min(x0, g.x - R); y0 = Math.min(y0, g.y - R); x1 = Math.max(x1, g.x + R); y1 = Math.max(y1, g.y + R);
   }
   const z = Math.min((W - 80) / (x1 - x0 + 120), (H - 220) / (y1 - y0 + 160), 1.4);
